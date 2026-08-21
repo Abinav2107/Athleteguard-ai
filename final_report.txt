@@ -1,0 +1,48 @@
+## Raw Measurements (from debug output)
+From frame 4 debug (representative case where both hips measured):
+- left_hip_angle: 28.29°
+- right_hip_angle: 60.53°
+- hip_angle (average): 44.41°
+- left_knee_angle: None
+- right_knee_angle: 48.68°
+- knee_angle: None
+- trunk_angle: 170.49°
+- symmetry_knee: None
+- symmetry_hip: 0.0° (large difference)
+- Confidence: 0.90
+
+## Identified Root Cause
+**Primary Issue (Fixed)**: Symmetry values were being double-normalized in risk_engine.py. The calculate_symmetry() function already returns a 0-100 score (100 = perfect symmetry), but this score was being passed through normalize_metric() again, causing perfect symmetry (0° difference) to score 0.0 instead of 100.0.
+
+**Secondary Issues (Not Calculation Bugs)**:
+- hip_angle component score remains 0.0 because measured hip_angle values (shoulder-hip-knee angle) are consistently below the hard_min threshold of 140.0°, causing them to be clamped to 140.0° and then normalized to 0.0% as they fall below the ideal range [160.0, 180.0].
+- temporal_stability component score remains 0.0 because the standard deviation of knee_angle over time exceeds the hard_max threshold of 15.0°, resulting in a 0.0 score after normalization.
+
+## Files Changed
+- risk_engine.py
+
+## Fixes Applied
+In risk_engine.py, lines 399-402 and 421-425:
+- **Before**: Symmetry values were calculated correctly by calculate_symmetry() (0-100, 100=perfect symmetry) but then incorrectly re-normalized via normalize_metric()
+- **After**: Symmetry values are directly assigned to normalized_scores without re-normalization, preserving their correct 0-100 scale
+
+## Before/After Component Scores
+**Before Fix** (Original Output):
+- knee_angle: 70.2
+- hip_angle: 0.0
+- trunk_angle: 11.2
+- symmetry_knee: 0.0
+- symmetry_hip: 0.0
+- temporal_stability: 0.0
+- Risk Score: 84.28/100
+- Risk Level: HIGH
+
+**After Fix** (Current Output):
+- knee_angle: 70.2
+- hip_angle: 0.0
+- trunk_angle: 11.2
+- symmetry_knee: 28.6
+- symmetry_hip: 70.4
+- temporal_stability: 0.0
+- Risk Score: 69.43/100
+- Risk Level: HIGH
