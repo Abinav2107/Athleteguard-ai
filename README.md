@@ -1,11 +1,19 @@
 # 🛡️ AthleteGuard AI — Biomechanical Movement Screening & Injury Risk Engine
 
-[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://share.streamlit.io/)
+[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://athleteguard-ai.streamlit.app/)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![MediaPipe](https://img.shields.io/badge/MediaPipe-Pose%20Landmarker-orange.svg)](https://developers.google.com/mediapipe)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 
 > **Clinical-grade video analytics for athletic jump landing and takeoff kinematics, powered by Google MediaPipe pose tracking, the Landing Error Scoring System (LESS) protocol (Padua et al., 2009), and AI-driven coaching intelligence.**
+
+---
+
+## 🌐 Live Web Application
+
+The application is deployed and accessible 24/7 on Streamlit Community Cloud:
+
+### 👉 **[https://athleteguard-ai.streamlit.app/](https://athleteguard-ai.streamlit.app/)**
 
 ---
 
@@ -32,36 +40,19 @@
 
 ---
 
-## 🚀 Quick Start (Local Setup)
+## 🚀 Local Setup (Optional)
 
-### 1. Clone the repository
 ```bash
+# 1. Clone repository
 git clone https://github.com/Abinav2107/Athleteguard-ai.git
 cd Athleteguard-ai
-```
 
-### 2. Install dependencies
-```bash
+# 2. Install dependencies
 pip install -r requirements.txt
-```
 
-### 3. Launch the dashboard
-```bash
+# 3. Launch dashboard locally
 streamlit run dashboard.py
 ```
-Open `http://localhost:8501` in your browser.
-
----
-
-## ☁️ Deploying to Streamlit Community Cloud
-
-This repository is pre-configured with `requirements.txt`, `packages.txt`, and `.streamlit/config.toml` for 1-click cloud deployment:
-
-1. Sign in to **[share.streamlit.io](https://share.streamlit.io/)** with GitHub.
-2. Click **"New app"**.
-3. Select repository: `Abinav2107/Athleteguard-ai`.
-4. Set Main file path: `dashboard.py`.
-5. Click **Deploy!**
 
 ---
 
