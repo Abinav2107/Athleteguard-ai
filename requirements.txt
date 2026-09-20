@@ -1,0 +1,7 @@
+streamlit>=1.35.0
+mediapipe>=0.10.14
+opencv-python-headless>=4.8.0.76
+pandas>=2.0.0
+numpy>=1.24.0
+reportlab>=4.0.0
+google-genai>=0.1.1

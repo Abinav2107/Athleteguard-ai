@@ -1,0 +1,27 @@
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Large local executables
+cloudflared.exe
+*.exe
+
+# Local database and outputs (generated on the fly)
+temp_outputs/
+athlete_sessions.db
+annotated_sample.mp4
+
+# OS and IDE files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.log
+.env
