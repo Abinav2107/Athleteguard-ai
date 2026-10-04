@@ -202,7 +202,7 @@ def detect_pose_single_frame(frame: np.ndarray, model_path: str):
         VisionRunningMode = mp.tasks.vision.RunningMode
         
         options = PoseLandmarkerOptions(
-            base_options=BaseOptions(model_asset_path=model_path),
+            base_options=BaseOptions(model_asset_path=model_path, delegate=BaseOptions.Delegate.CPU),
             running_mode=VisionRunningMode.IMAGE
         )
         with PoseLandmarker.create_from_options(options) as landmarker:
@@ -611,7 +611,7 @@ def generate_coach_comparison_video(
     VisionRunningMode = mp.tasks.vision.RunningMode
     
     options = PoseLandmarkerOptions(
-        base_options=BaseOptions(model_asset_path=model_path),
+        base_options=BaseOptions(model_asset_path=model_path, delegate=BaseOptions.Delegate.CPU),
         running_mode=VisionRunningMode.VIDEO
     )
     
@@ -774,7 +774,7 @@ def process_video(video_path, model_path, output_annotated_path=None, sport='lon
     VisionRunningMode = mp.tasks.vision.RunningMode
 
     options = PoseLandmarkerOptions(
-        base_options=BaseOptions(model_asset_path=model_path),
+        base_options=BaseOptions(model_asset_path=model_path, delegate=BaseOptions.Delegate.CPU),
         running_mode=VisionRunningMode.VIDEO,
         num_poses=1,
         min_pose_detection_confidence=0.5,
