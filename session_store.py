@@ -63,6 +63,18 @@ def init_db(db_path: Optional[str] = None):
         cursor.execute("ALTER TABLE sessions ADD COLUMN perspective TEXT DEFAULT 'Sagittal'")
     if 'fatigue_index' not in existing_cols:
         cursor.execute("ALTER TABLE sessions ADD COLUMN fatigue_index REAL")
+    if 'is_orthopedic' not in existing_cols:
+        cursor.execute("ALTER TABLE sessions ADD COLUMN is_orthopedic INTEGER DEFAULT 0")
+    if 'operated_limb' not in existing_cols:
+        cursor.execute("ALTER TABLE sessions ADD COLUMN operated_limb TEXT DEFAULT 'NONE'")
+    if 'graft_type' not in existing_cols:
+        cursor.execute("ALTER TABLE sessions ADD COLUMN graft_type TEXT DEFAULT 'N/A'")
+    if 'post_op_months' not in existing_cols:
+        cursor.execute("ALTER TABLE sessions ADD COLUMN post_op_months INTEGER DEFAULT 0")
+    if 'lsi_score' not in existing_cols:
+        cursor.execute("ALTER TABLE sessions ADD COLUMN lsi_score REAL")
+    if 'surgeon_name' not in existing_cols:
+        cursor.execute("ALTER TABLE sessions ADD COLUMN surgeon_name TEXT DEFAULT ''")
         
     conn.commit()
     conn.close()
@@ -84,6 +96,12 @@ def save_session(athlete_id: str,
                  ankle_angle: Optional[float] = None,
                  perspective: Optional[str] = None,
                  fatigue_index: Optional[float] = None,
+                 is_orthopedic: int = 0,
+                 operated_limb: Optional[str] = None,
+                 graft_type: Optional[str] = None,
+                 post_op_months: Optional[int] = None,
+                 lsi_score: Optional[float] = None,
+                 surgeon_name: Optional[str] = None,
                  db_path: Optional[str] = None) -> int:
     init_db(db_path)
     conn = get_connection(db_path)
@@ -98,8 +116,9 @@ def save_session(athlete_id: str,
             timestamp, athlete_id, sport, video_name, overall_risk_score, risk_level,
             peak_risk_score, peak_phase, landing_risk_score, landing_risk_elevated,
             phase_scores_json, components_json, risk_drivers, consistency_score,
-            foot_strike, ankle_angle, perspective, fatigue_index
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            foot_strike, ankle_angle, perspective, fatigue_index,
+            is_orthopedic, operated_limb, graft_type, post_op_months, lsi_score, surgeon_name
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         timestamp,
         athlete_clean,
@@ -118,13 +137,34 @@ def save_session(athlete_id: str,
         foot_strike or "Undetermined",
         round(float(ankle_angle), 1) if ankle_angle is not None else None,
         perspective or "Sagittal",
-        round(float(fatigue_index), 2) if fatigue_index is not None else None
+        round(float(fatigue_index), 2) if fatigue_index is not None else None,
+        1 if is_orthopedic else 0,
+        operated_limb or "NONE",
+        graft_type or "N/A",
+        int(post_op_months) if post_op_months is not None else 0,
+        round(float(lsi_score), 1) if lsi_score is not None else None,
+        surgeon_name or ""
     ))
     
     session_id = cursor.lastrowid
     conn.commit()
     conn.close()
     return session_id
+
+def get_orthopedic_patient_timeline(patient_id: str, db_path: Optional[str] = None) -> pd.DataFrame:
+    """Retrieve longitudinal post-op recovery timeline and LSI trajectory for a patient."""
+    init_db(db_path)
+    conn = get_connection(db_path)
+    query = """
+        SELECT id, timestamp, athlete_id, is_orthopedic, post_op_months, graft_type, operated_limb,
+               overall_risk_score, lsi_score, landing_risk_score, surgeon_name, video_name
+        FROM sessions
+        WHERE athlete_id = ? AND (is_orthopedic = 1 OR lsi_score IS NOT NULL)
+        ORDER BY post_op_months ASC, id ASC
+    """
+    df = pd.read_sql_query(query, conn, params=[patient_id.strip()])
+    conn.close()
+    return df
 
 def get_athlete_history(athlete_id: Optional[str] = None, 
                         sport: Optional[str] = None,
@@ -158,6 +198,16 @@ def get_all_athlete_ids(db_path: Optional[str] = None) -> List[str]:
     conn = get_connection(db_path)
     cursor = conn.cursor()
     cursor.execute("SELECT DISTINCT athlete_id FROM sessions ORDER BY athlete_id ASC")
+    rows = cursor.fetchall()
+    conn.close()
+    return [r[0] for r in rows if r[0]]
+
+def get_all_orthopedic_patient_ids(db_path: Optional[str] = None) -> List[str]:
+    """Retrieve all unique patient IDs from orthopedic sessions."""
+    init_db(db_path)
+    conn = get_connection(db_path)
+    cursor = conn.cursor()
+    cursor.execute("SELECT DISTINCT athlete_id FROM sessions WHERE is_orthopedic = 1 OR lsi_score IS NOT NULL ORDER BY athlete_id ASC")
     rows = cursor.fetchall()
     conn.close()
     return [r[0] for r in rows if r[0]]

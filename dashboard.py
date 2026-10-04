@@ -18,6 +18,7 @@ import sys
 import json
 import pandas as pd
 import math
+from datetime import datetime, date, timedelta
 from typing import Optional, List, Dict
 
 # Add current directory to path
@@ -31,9 +32,9 @@ from movement_analysis import (
 from risk_engine import (
     WEIGHTS, SPORT_WEIGHTS, SPORT_THRESHOLDS, NORMALIZATION_THRESHOLDS, 
     LESS_MAPPINGS, explain_risk_drivers, get_sport_key, calculate_normative_benchmarks,
-    generate_explainability_cards
+    generate_explainability_cards, calculate_limb_symmetry_index
 )
-from report_generator import generate_pdf_report
+from report_generator import generate_pdf_report, generate_orthopedic_clearance_certificate
 import session_store
 
 def extract_frame_at_index(video_path: str, target_frame: int):
@@ -422,6 +423,38 @@ st.markdown("""
         color: #64748b;
         margin-top: 6px;
     }
+    
+    /* Orthopedic Mode Styles */
+    .badge-ortho-pass {
+        background: rgba(16, 185, 129, 0.2);
+        border: 1px solid #10b981;
+        color: #34d399;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 700;
+        display: inline-block;
+    }
+    .badge-ortho-hold {
+        background: rgba(245, 158, 11, 0.2);
+        border: 1px solid #f59e0b;
+        color: #fbbf24;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 700;
+        display: inline-block;
+    }
+    .badge-ortho-danger {
+        background: rgba(239, 68, 68, 0.2);
+        border: 1px solid #ef4444;
+        color: #f87171;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 700;
+        display: inline-block;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -431,43 +464,125 @@ st.markdown("""
 st.markdown("""
 <div class="app-header">
     <div class="app-title">🏃 AthleteGuard AI <span style="font-size:13px; background:#2563eb; color:#ffffff; padding:2px 8px; border-radius:12px; font-weight:600;">v2.5 Clinical Pro</span></div>
-    <div class="app-subtitle">Clinical Kinematic Movement Screening & ACL Injury Risk Assessment (Track & Field | Volleyball)</div>
+    <div class="app-subtitle">Clinical Kinematic Movement Screening, Limb Symmetry (LSI), & Post-Op Orthopedic Clearance</div>
     <div class="chip-container">
         <span class="chip chip-active">● MediaPipe Vision 3D</span>
         <span class="chip chip-active">● LESS Protocol (Padua et al., 2009)</span>
+        <span class="chip chip-active">● 🏥 Orthopedic Clearance</span>
+        <span class="chip">● 📐 Limb Symmetry Index (LSI ≥ 90%)</span>
         <span class="chip">● Frontal Knee Valgus (FPPA)</span>
-        <span class="chip">● Sport-Calibrated Deceleration</span>
-        <span class="chip">● Consistency Variance Engine</span>
-        <span class="chip">● 1-Page Clinical PDF Export</span>
+        <span class="chip">● 📋 CPT 97750 / 98977 Billing</span>
+        <span class="chip">● 1-Page Certificate Export</span>
     </div>
 </div>
 """, unsafe_allow_html=True)
 
 # ==============================
-# SIDEBAR: ATHLETE & SCREENING CONTROLS
+# SIDEBAR: CLINICAL MODE & CONTROLS
 # ==============================
 with st.sidebar:
-    st.markdown("### 👤 Athlete Profile")
-    athlete_id_raw = st.text_input(
-        "Athlete Name / ID", 
-        value="", 
-        placeholder="Enter Athlete Name / ID (e.g. Marcus Vance)",
-        help="Unique identifier for longitudinal tracking."
-    )
-    athlete_id = athlete_id_raw.strip() if athlete_id_raw.strip() else "Athlete"
-    
-    sport_selection = st.selectbox(
-        "Sport / Discipline Mode", 
+    st.markdown("### 🏥 System Mode")
+    clinical_mode = st.radio(
+        "Screening Domain",
         options=[
-            "Long Jump (Track & Field)", 
-            "Volleyball (Spike / Block Landing)",
-            "Basketball (Deceleration & Rebound Landing)",
-            "Drop Vertical Jump (Clinical DVJ - Gold Standard LESS)",
-            "Soccer (Cutting & Cleat Deceleration)"
+            "🏃 Standard Athletic Screening",
+            "🏥 Post-Op Orthopedic & ACL Clearance"
         ],
-        help="Selects sport-specific deceleration thresholds and risk weightings."
+        help="Select 'Post-Op Orthopedic & ACL Clearance' for hospital-grade Return-to-Play clearance, Limb Symmetry Index (LSI %), and CPT billing certificates."
     )
-    sport_key = get_sport_key(sport_selection)
+    is_ortho_mode = ("Orthopedic" in clinical_mode)
+    
+    st.divider()
+    
+    if is_ortho_mode:
+        st.markdown("### 📋 Patient & Surgical Case")
+        patient_id_raw = st.text_input(
+            "Patient Identifier / Medical Record #", 
+            value="", 
+            placeholder="e.g. ORTHO-2024-089",
+            help="Unique hospital patient identifier or MRN for surgical audit."
+        )
+        athlete_id = patient_id_raw.strip() if patient_id_raw.strip() else "Patient-01"
+        
+        surgeon_name_input = st.text_input(
+            "Attending Orthopedic Surgeon",
+            value="",
+            placeholder="e.g. Dr. K. Richards, MD, FAAOS",
+            help="Operating or attending surgeon name displayed on official clearance certificates."
+        )
+        surgeon_name = surgeon_name_input.strip() if surgeon_name_input.strip() else "Attending Orthopedic Surgeon, MD"
+        
+        surgery_date_val = st.date_input(
+            "Date of ACL Reconstruction",
+            value=date.today() - timedelta(days=180),
+            help="Date the surgical reconstruction was performed."
+        )
+        surgery_date_str = str(surgery_date_val)
+        
+        operated_side_choice = st.radio(
+            "Operated Limb (Involved Side)",
+            options=["Right Knee", "Left Knee"],
+            horizontal=True,
+            help="Designates the surgical limb for bilateral kinematic symmetry indexing (LSI %)."
+        )
+        op_side_key = "RIGHT" if "Right" in operated_side_choice else "LEFT"
+        
+        graft_choice = st.selectbox(
+            "Surgical Graft Harvest",
+            options=[
+                "Bone-Patellar Tendon-Bone (BPTB) Autograft",
+                "Hamstring Tendon Autograft",
+                "Quadriceps Tendon Autograft",
+                "Allograft (Achilles / Tibialis Anterior)"
+            ],
+            help="Graft type dictates donor-site morbidity screening pearls and deceleration cautions."
+        )
+        
+        post_op_months = st.selectbox(
+            "Rehabilitation Milestone Protocol",
+            options=[3, 6, 9, 12],
+            format_func=lambda m: {
+                3: "Month 3 (Early Loading & Quad Activation — Target: ≥70% LSI)",
+                6: "Month 6 (Impact & Deceleration — Target: ≥80% LSI)",
+                9: "Month 9 (Return-to-Sport / Cutting — Target: ≥90% LSI)",
+                12: "Month 12 (Full Unrestricted Return-to-Play — Target: ≥90% LSI)"
+            }.get(m, f"Month {m}"),
+            index=1,
+            help="Milestone criteria according to Grindem et al. / Padua RTP protocols."
+        )
+        
+        sport_selection = "Drop Vertical Jump (Clinical DVJ - Gold Standard LESS)"
+        sport_key = "drop_jump"
+        
+        st.info("🏥 **Orthopedic Protocol Active:** Enforcing Padua et al. (2009) LESS drop-jump criteria and Grindem et al. (2016) Limb Symmetry Index (≥90% clearance).")
+    else:
+        st.markdown("### 👤 Athlete Profile")
+        athlete_id_raw = st.text_input(
+            "Athlete Name / ID", 
+            value="", 
+            placeholder="Enter Athlete Name / ID (e.g. Marcus Vance)",
+            help="Unique identifier for longitudinal tracking."
+        )
+        athlete_id = athlete_id_raw.strip() if athlete_id_raw.strip() else "Athlete"
+        
+        sport_selection = st.selectbox(
+            "Sport / Discipline Mode", 
+            options=[
+                "Long Jump (Track & Field)", 
+                "Volleyball (Spike / Block Landing)",
+                "Basketball (Deceleration & Rebound Landing)",
+                "Drop Vertical Jump (Clinical DVJ - Gold Standard LESS)",
+                "Soccer (Cutting & Cleat Deceleration)"
+            ],
+            help="Selects sport-specific deceleration thresholds and risk weightings."
+        )
+        sport_key = get_sport_key(sport_selection)
+        
+        surgeon_name = None
+        surgery_date_str = None
+        op_side_key = "RIGHT"
+        graft_choice = "Bone-Patellar Tendon-Bone (BPTB) Autograft"
+        post_op_months = 6
     
     st.divider()
     st.markdown("### 🔀 Screening Mode")
@@ -582,6 +697,28 @@ with tab_screen:
                         st.session_state['latest_sport_selection'] = sport_selection
                         st.session_state['latest_sport_key'] = sport_key
                         st.session_state['scrub_frame'] = result.get('keyframes', {}).get('initial_contact', 1)
+
+                        # Orthopedic Post-Op Calculation
+                        if is_ortho_mode:
+                            raw_k = result.get('risk_result', {}).get('raw_values', {})
+                            lsi_res = calculate_limb_symmetry_index(
+                                raw_values=raw_k,
+                                operated_side=op_side_key,
+                                graft_type=graft_choice,
+                                post_op_months=post_op_months
+                            )
+                            st.session_state['latest_lsi_data'] = lsi_res
+                            st.session_state['is_ortho_session'] = True
+                            st.session_state['ortho_meta'] = {
+                                'patient_id': athlete_id,
+                                'surgeon_name': surgeon_name,
+                                'surgery_date': surgery_date_str,
+                                'operated_side': op_side_key,
+                                'graft_type': graft_choice,
+                                'post_op_months': post_op_months
+                            }
+                        else:
+                            st.session_state['is_ortho_session'] = False
                     except Exception as e:
                         st.error(f"Analysis failed: {e}")
                         st.stop()
@@ -611,7 +748,13 @@ with tab_screen:
                         risk_drivers=risk_drivers.get('statement', ''),
                         foot_strike=result.get('landing_foot_strike', 'Forefoot / Midfoot'),
                         ankle_angle=result.get('landing_ankle_angle'),
-                        perspective=result.get('perspective', {}).get('perspective', 'SAGITTAL') if isinstance(result.get('perspective'), dict) else result.get('perspective', 'SAGITTAL')
+                        perspective=result.get('perspective', {}).get('perspective', 'SAGITTAL') if isinstance(result.get('perspective'), dict) else result.get('perspective', 'SAGITTAL'),
+                        is_orthopedic=1 if is_ortho_mode else 0,
+                        operated_limb=op_side_key if is_ortho_mode else None,
+                        graft_type=graft_choice if is_ortho_mode else None,
+                        post_op_months=post_op_months if is_ortho_mode else None,
+                        lsi_score=st.session_state.get('latest_lsi_data', {}).get('composite_lsi') if is_ortho_mode else None,
+                        surgeon_name=surgeon_name if is_ortho_mode else None
                     )
                     st.toast(f"Session saved for {athlete_id}!", icon="💾")
                 except Exception as e:
@@ -634,6 +777,204 @@ with tab_screen:
                 landing_score = landing_info.get('average_risk_score')
 
                 st.markdown("---")
+
+                # ==========================================
+                # ORTHOPEDIC POST-OP CLEARANCE & LSI BLOCK (IF ACTIVE)
+                # ==========================================
+                if is_ortho_mode or st.session_state.get('is_ortho_session'):
+                    lsi_data = st.session_state.get('latest_lsi_data')
+                    if not lsi_data:
+                        raw_k = result.get('risk_result', {}).get('raw_values', {})
+                        lsi_data = calculate_limb_symmetry_index(
+                            raw_values=raw_k,
+                            operated_side=op_side_key,
+                            graft_type=graft_choice,
+                            post_op_months=post_op_months
+                        )
+                        st.session_state['latest_lsi_data'] = lsi_data
+
+                    ortho_meta = st.session_state.get('ortho_meta', {
+                        'patient_id': cur_athlete_id,
+                        'surgeon_name': surgeon_name or 'Dr. Attending Orthopedic Surgeon, MD',
+                        'surgery_date': surgery_date_str or str(date.today() - timedelta(days=180)),
+                        'operated_side': op_side_key,
+                        'graft_type': graft_choice,
+                        'post_op_months': post_op_months
+                    })
+
+                    c_lsi = lsi_data.get('composite_lsi', 85.0)
+                    t_lsi = lsi_data.get('target_lsi', 90.0)
+                    m_met = lsi_data.get('milestone_met', False)
+                    c_status = lsi_data.get('status', 'CONDITIONAL_HOLD')
+                    c_badge_col = lsi_data.get('badge_color', '#fbbf24')
+                    c_rec = lsi_data.get('clinical_recommendation', '')
+                    g_pearl = lsi_data.get('graft_pearl', '')
+
+                    st.markdown("### 🏥 Orthopedic Post-Op Surgical Clearance & Return-to-Play Verification")
+                    st.caption(f"Standardized objective evaluation according to **Grindem et al. (2016)** and **Padua et al. (2009) LESS** protocols.")
+
+                    col_lsi_hero, col_lsi_rationale, col_lsi_actions = st.columns([0.33, 0.42, 0.25])
+                    
+                    with col_lsi_hero:
+                        if c_status == "CLINICAL_PASS":
+                            badge_cls = "badge-ortho-pass"
+                            st_msg = "CLEARED: LSI ≥ 90%"
+                        elif c_status == "CONDITIONAL_HOLD":
+                            badge_cls = "badge-ortho-hold"
+                            st_msg = "CONDITIONAL HOLD"
+                        else:
+                            badge_cls = "badge-ortho-danger"
+                            st_msg = "STRICT HOLD: RE-TEAR RISK"
+
+                        st.markdown(f"""
+                        <div class="glass-card" style="text-align:center; border: 1.5px solid {c_badge_col};">
+                            <div style="font-size:11px; font-weight:700; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px;">Composite Limb Symmetry Index</div>
+                            <div style="font-size:46px; font-weight:900; color:{c_badge_col}; margin: 4px 0; line-height:1.1;">
+                                {c_lsi:.1f}<span style="font-size:20px; color:#94a3b8;">%</span>
+                            </div>
+                            <div style="margin-bottom:10px;"><span class="{badge_cls}">{st_msg}</span></div>
+                            <div style="font-size:12px; color:#cbd5e1; border-top: 1px solid rgba(255,255,255,0.08); padding-top:8px;">
+                                Milestone Target: <b>≥{t_lsi:.0f}% LSI</b> ({'✅ MET' if m_met else '⚠️ UNMET'})<br>
+                                Protocol: <b>Month {ortho_meta['post_op_months']}</b> | Limb: <b>{ortho_meta['operated_side']} KNEE</b>
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+
+                    with col_lsi_rationale:
+                        st.markdown(f"""
+                        <div class="driver-box" style="height:100%; border-color:{c_badge_col};">
+                            <div style="font-size:13px; font-weight:700; color:#38bdf8; margin-bottom:6px; display:flex; align-items:center; gap:6px;">
+                                🩺 Attending Surgeon Biomechanical Rationale
+                            </div>
+                            <div style="font-size:13px; color:#f8fafc; line-height:1.55; margin-bottom:10px;">
+                                {c_rec}
+                            </div>
+                            <div style="background:rgba(2,132,199,0.1); border-left:3px solid #0284c7; padding:6px 10px; border-radius:4px; font-size:11px; color:#bae6fd; margin-bottom:8px;">
+                                💡 <b>Graft Pearl:</b> {g_pearl}
+                            </div>
+                            <div style="font-size:10px; color:#94a3b8;">
+                                📚 <i>Grindem et al. (BJSM 2016): Achieving ≥90% LSI before clearance reduces secondary ACL injury rate by 51% per month delayed.</i>
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+
+                    with col_lsi_actions:
+                        st.markdown("""
+                        <div class="glass-card" style="padding:16px;">
+                            <div style="font-size:12px; font-weight:700; color:#38bdf8; margin-bottom:8px; text-transform:uppercase;">
+                                📋 Hospital Certificate
+                            </div>
+                            <div style="font-size:11px; color:#94a3b8; margin-bottom:12px;">
+                                Export formal clearance & RTP certificate with physician sign-off block and CPT billing codes.
+                            </div>
+                        """, unsafe_allow_html=True)
+
+                        try:
+                            cert_pdf_bytes = generate_orthopedic_clearance_certificate(
+                                patient_id=ortho_meta['patient_id'],
+                                surgeon_name=ortho_meta['surgeon_name'],
+                                surgery_date=ortho_meta['surgery_date'],
+                                operated_side=ortho_meta['operated_side'],
+                                graft_type=ortho_meta['graft_type'],
+                                post_op_months=ortho_meta['post_op_months'],
+                                video_name=cur_video_name,
+                                lsi_data=lsi_data,
+                                result=result
+                            )
+                            st.download_button(
+                                label="📥 Download Surgical Clearance Certificate (PDF)",
+                                data=cert_pdf_bytes,
+                                file_name=f"{ortho_meta['patient_id']}_Orthopedic_Clearance_Certificate.pdf",
+                                mime="application/pdf",
+                                type="primary",
+                                use_container_width=True
+                            )
+                        except Exception as cert_err:
+                            st.error(f"Certificate generation error: {cert_err}")
+
+                        st.markdown("""
+                            <div style="font-size:10px; color:#64748b; margin-top:8px; border-top: 1px solid rgba(255,255,255,0.06); padding-top:6px;">
+                                <b>Billing Codes:</b> CPT 97750 (Physical Perf Test), CPT 98977 (RTM Device Monitoring)
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+
+                    # Bilateral Kinematic Comparative Scorecard
+                    st.markdown("#### ⚖️ Bilateral Kinematic Scorecard (Operated vs Healthy Limb)")
+                    st.caption(f"Direct frame-synchronized comparison of the **{ortho_meta['operated_side']} (Involved)** limb versus the **Contralateral (Healthy)** limb.")
+                    
+                    sub = lsi_data.get('sub_metrics', {})
+                    col_m1, col_m2, col_m3, col_m4 = st.columns(4)
+                    
+                    with col_m1:
+                        kf = sub.get('knee_flexion', {})
+                        kf_lsi = kf.get('lsi', 100.0)
+                        kf_col = "#34d399" if kf_lsi >= 90 else ("#fbbf24" if kf_lsi >= 80 else "#f87171")
+                        st.markdown(f"""
+                        <div class="phase-card" style="border-top: 3px solid {kf_col};">
+                            <div class="phase-title">Knee Flexion Shock Absorpt.</div>
+                            <div style="font-size:26px; font-weight:800; color:{kf_col};">{kf_lsi:.1f}% <span style="font-size:12px; color:#94a3b8;">LSI</span></div>
+                            <div style="font-size:12px; color:#cbd5e1; margin-top:6px;">
+                                Operated: <b>{kf.get('involved', 0):.1f}°</b><br>
+                                Healthy: <b>{kf.get('uninvolved', 0):.1f}°</b><br>
+                                Δ Deficit: <b>{kf.get('diff', 0):.1f}°</b>
+                            </div>
+                            <div style="font-size:10px; color:#94a3b8; margin-top:6px;">LESS Item #5 & #6</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        
+                    with col_m2:
+                        kv = sub.get('knee_valgus', {})
+                        kv_lsi = kv.get('lsi', 100.0)
+                        kv_col = "#34d399" if kv_lsi >= 90 else ("#fbbf24" if kv_lsi >= 80 else "#f87171")
+                        st.markdown(f"""
+                        <div class="phase-card" style="border-top: 3px solid {kv_col};">
+                            <div class="phase-title">Dynamic Valgus Control (FPPA)</div>
+                            <div style="font-size:26px; font-weight:800; color:{kv_col};">{kv_lsi:.1f}% <span style="font-size:12px; color:#94a3b8;">LSI</span></div>
+                            <div style="font-size:12px; color:#cbd5e1; margin-top:6px;">
+                                Operated: <b>{kv.get('involved', 0):.1f}°</b><br>
+                                Healthy: <b>{kv.get('uninvolved', 0):.1f}°</b><br>
+                                Valgus Collapse: <b>{kv.get('diff', 0):.1f}°</b>
+                            </div>
+                            <div style="font-size:10px; color:#94a3b8; margin-top:6px;">LESS Item #8 & #9</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+
+                    with col_m3:
+                        hf = sub.get('hip_flexion', {})
+                        hf_lsi = hf.get('lsi', 100.0)
+                        hf_col = "#34d399" if hf_lsi >= 90 else ("#fbbf24" if hf_lsi >= 80 else "#f87171")
+                        st.markdown(f"""
+                        <div class="phase-card" style="border-top: 3px solid {hf_col};">
+                            <div class="phase-title">Hip Hinge Attenuation</div>
+                            <div style="font-size:26px; font-weight:800; color:{hf_col};">{hf_lsi:.1f}% <span style="font-size:12px; color:#94a3b8;">LSI</span></div>
+                            <div style="font-size:12px; color:#cbd5e1; margin-top:6px;">
+                                Operated: <b>{hf.get('involved', 0):.1f}°</b><br>
+                                Healthy: <b>{hf.get('uninvolved', 0):.1f}°</b><br>
+                                Δ Symmetry: <b>{hf.get('diff', 0):.1f}°</b>
+                            </div>
+                            <div style="font-size:10px; color:#94a3b8; margin-top:6px;">LESS Item #4 & #7</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+
+                    with col_m4:
+                        ad = sub.get('ankle_dorsiflexion', {})
+                        ad_lsi = ad.get('lsi', 100.0)
+                        ad_col = "#34d399" if ad_lsi >= 90 else ("#fbbf24" if ad_lsi >= 80 else "#f87171")
+                        st.markdown(f"""
+                        <div class="phase-card" style="border-top: 3px solid {ad_col};">
+                            <div class="phase-title">Ankle Dorsiflexion Dissip.</div>
+                            <div style="font-size:26px; font-weight:800; color:{ad_col};">{ad_lsi:.1f}% <span style="font-size:12px; color:#94a3b8;">LSI</span></div>
+                            <div style="font-size:12px; color:#cbd5e1; margin-top:6px;">
+                                Operated: <b>{ad.get('involved', 0):.1f}°</b><br>
+                                Healthy: <b>{ad.get('uninvolved', 0):.1f}°</b><br>
+                                Δ Symmetry: <b>{ad.get('diff', 0):.1f}°</b>
+                            </div>
+                            <div style="font-size:10px; color:#94a3b8; margin-top:6px;">LESS Item #1 & #11</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+
+                    st.markdown("---")
 
                 # ==========================================
                 # SECTION 0: EXECUTIVE SUMMARY & RISK DRIVERS
@@ -1837,11 +2178,78 @@ with tab_history:
 
     view_mode = st.radio(
         "Select Analytics Perspective",
-        options=["Individual Athlete Timeline", "Squad Roster Overview (Multi-Athlete Ranking)"],
+        options=[
+            "Individual Athlete Timeline", 
+            "Squad Roster Overview (Multi-Athlete Ranking)",
+            "🏥 Post-Op Orthopedic Recovery Timeline"
+        ],
         horizontal=True
     )
 
-    if view_mode == "Squad Roster Overview (Multi-Athlete Ranking)":
+    if view_mode == "🏥 Post-Op Orthopedic Recovery Timeline":
+        st.markdown("#### 🏥 Longitudinal Post-Operative ACL Recovery & LSI Trajectory")
+        st.caption("Tracks bilateral Limb Symmetry Index (LSI %) recovery across clinical rehabilitation milestones (Months 3, 6, 9, 12) according to Grindem et al. criteria.")
+        
+        ortho_patients = session_store.get_all_orthopedic_patient_ids()
+        
+        col_op1, col_op2 = st.columns([0.6, 0.4])
+        with col_op1:
+            if ortho_patients:
+                selected_patient = st.selectbox("Select Orthopedic Patient ID", options=ortho_patients, key="ortho_patient_select")
+            else:
+                selected_patient = st.text_input("Enter Patient ID", value="Patient-01", key="ortho_patient_text")
+        with col_op2:
+            st.caption("Tracks patients with at least one orthopedic clearance session or recorded LSI score.")
+
+        if selected_patient:
+            timeline_df = session_store.get_orthopedic_patient_timeline(selected_patient)
+            
+            if timeline_df.empty:
+                st.info(f"ℹ️ No post-op orthopedic sessions recorded for Patient **{selected_patient}**. Run a screening in Orthopedic Mode to begin tracking.")
+            else:
+                kpi_total = len(timeline_df)
+                latest_sess = timeline_df.iloc[-1]
+                latest_lsi = latest_sess.get('lsi_score') or 0.0
+                first_lsi = timeline_df.iloc[0].get('lsi_score') or latest_lsi
+                lsi_delta = latest_lsi - first_lsi
+                
+                k1, k2, k3, k4 = st.columns(4)
+                with k1:
+                    st.metric("Milestones Screened", f"{kpi_total} visits")
+                with k2:
+                    st.metric("Current LSI Score", f"{latest_lsi:.1f}%", delta=f"{lsi_delta:+.1f}% vs Baseline")
+                with k3:
+                    st.metric("Current Milestone", f"Month {latest_sess.get('post_op_months', 'N/A')}")
+                with k4:
+                    if latest_lsi >= 90.0:
+                        st.markdown('<div style="padding-top:14px;"><span class="badge-ortho-pass">✅ CLEARED (≥90% LSI)</span></div>', unsafe_allow_html=True)
+                    elif latest_lsi >= 80.0:
+                        st.markdown('<div style="padding-top:14px;"><span class="badge-ortho-hold">⚠️ CONDITIONAL (80-89%)</span></div>', unsafe_allow_html=True)
+                    else:
+                        st.markdown('<div style="padding-top:14px;"><span class="badge-ortho-danger">🚨 STRICT HOLD (&lt;80%)</span></div>', unsafe_allow_html=True)
+
+                st.markdown("<br>", unsafe_allow_html=True)
+                
+                # Longitudinal Chart
+                st.markdown("##### 📈 LSI Trajectory vs Clinical Clearance Benchmark (90%)")
+                chart_df = timeline_df.copy()
+                chart_df['Milestone'] = chart_df['post_op_months'].apply(lambda m: f"Month {int(m)}" if pd.notna(m) else "Visit")
+                chart_df['LSI Score (%)'] = chart_df['lsi_score']
+                chart_df['Clearance Benchmark (90%)'] = 90.0
+                
+                st.line_chart(
+                    chart_df.set_index('Milestone')[['LSI Score (%)', 'Clearance Benchmark (90%)']]
+                )
+                
+                st.markdown("##### 📋 Post-Operative Clinical Case Audit Log")
+                disp_ortho_cols = [
+                    'id', 'timestamp', 'athlete_id', 'post_op_months', 'operated_limb',
+                    'graft_type', 'lsi_score', 'overall_risk_score', 'surgeon_name', 'video_name'
+                ]
+                avail = [c for c in disp_ortho_cols if c in timeline_df.columns]
+                st.dataframe(timeline_df[avail], use_container_width=True)
+
+    elif view_mode == "Squad Roster Overview (Multi-Athlete Ranking)":
         st.markdown("#### 👥 Squad Roster Injury Vulnerability Ranking")
         st.caption("Aggregated risk ranking across all active athletes based on their most recent movement screening.")
 

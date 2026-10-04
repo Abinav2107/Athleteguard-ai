@@ -19,12 +19,14 @@ The application is deployed and accessible 24/7 on Streamlit Community Cloud:
 
 ## 🌟 Key Capabilities
 
+* 🏥 **Orthopedic Post-Op & ACL Clearance Mode**: Tailored for orthopedic surgery and sports medicine departments. Evaluates objective **Limb Symmetry Index (LSI %)** comparing the reconstructed limb against the contralateral healthy limb according to **Grindem et al. (2016)** criteria ($\ge 90\%$ clearance threshold).
+* 📋 **Hospital-Grade Surgical Clearance Certificate (PDF)**: Generates an executive clinical return-to-play clearance certificate with bilateral kinematic scorecards, graft-specific donor-site pearls, CPT billing codes (**CPT 97750, 98975, 98977**), and attending orthopedic surgeon signature sign-off.
+* 📈 **Longitudinal Post-Op Recovery Milestones**: Tracks rehabilitation progression across Month 3 (early loading), Month 6 (impact/deceleration), Month 9 (RTP cutting), and Month 12 (unrestricted play) protocols with interactive trajectory curves.
 * 🔬 **Phase-Aware Movement Parsing**: Automatically identifies and tracks **Approach**, **Takeoff**, **Flight**, and **Landing** phases via vertical ankle kinematics and velocity profiling.
 * 🦵 **Frontal Plane Knee Valgus (FPPA)**: Real-time quantification of dynamic knee collapse—the primary non-contact mechanism for ACL ruptures.
-* 🧠 **Plain-Language Explainability Layer**: Translates raw angular measurements into structured biomechanical risk drivers grounded in LESS literature.
+* 🧠 **Plain-Language Explainability Layer**: Translates raw angular measurements into structured biomechanical risk drivers grounded in LESS literature (Padua et al., 2009).
 * 🎯 **Coach Comparison Overlay**: Ghost-overlaid or side-by-side synchronized view comparing the athlete's attempt against an elite benchmark or their personal best, featuring frame-by-frame **Takeoff Joint Deltas**.
 * 📊 **Multi-Rep Consistency & Fatigue Degradation**: Computes motor variance across repeated attempts and tracks neuromuscular fatigue drift via linear regression slopes.
-* 📄 **Clinical PDF Report Generation**: One-click export of an executive 1-page PDF screening summary suitable for physicians, coaches, and physiotherapists.
 * 🤖 **Clinical Physio AI Advisor**: Generates periodized 4-week corrective training regimens targeting specific joint deficit vectors.
 
 ---

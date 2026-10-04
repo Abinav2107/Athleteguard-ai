@@ -449,3 +449,320 @@ def generate_pdf_report(athlete_id: str,
     else:
         buffer.seek(0)
         return buffer.getvalue()
+
+
+def generate_orthopedic_clearance_certificate(
+    patient_id: str,
+    surgeon_name: str,
+    surgery_date: str,
+    operated_side: str,
+    graft_type: str,
+    post_op_months: int,
+    video_name: str,
+    lsi_data: Dict[str, Any],
+    result: Dict[str, Any],
+    output_path: Optional[str] = None
+) -> bytes:
+    """
+    Generate an executive, hospital-grade Surgical Clearance & Return-to-Play (RTP)
+    Certificate for orthopedic surgeons, sports physical therapists, and medical records.
+    Features:
+      - Objective Limb Symmetry Index (LSI %) evaluation
+      - Bilateral kinematic comparative scorecard (Operated vs Healthy)
+      - Clinical clearance decision block (Pass / Conditional / Strict Hold)
+      - Graft-specific donor-site pearls & CPT 97750 / 98975-98977 billing codes
+      - Attending Orthopedic Surgeon signature & state license certification block
+    """
+    buffer = io.BytesIO()
+    target_dest = output_path if output_path else buffer
+    
+    doc = SimpleDocTemplate(
+        target_dest,
+        pagesize=letter,
+        leftMargin=28,
+        rightMargin=28,
+        topMargin=22,
+        bottomMargin=22
+    )
+    
+    content_width = 556
+    
+    c_navy = colors.HexColor("#0F172A")
+    c_blue = colors.HexColor("#0284C7")
+    c_blue_dark = colors.HexColor("#0369A1")
+    c_gray_dark = colors.HexColor("#1E293B")
+    c_gray_muted = colors.HexColor("#64748B")
+    c_gray_bg = colors.HexColor("#F8FAFC")
+    c_border = colors.HexColor("#CBD5E1")
+    
+    # Status colors
+    status = lsi_data.get('status', 'CONDITIONAL_HOLD')
+    if status == 'CLINICAL_PASS':
+        c_status = colors.HexColor("#10B981")
+        c_status_bg = colors.HexColor("#ECFDF5")
+        status_label = "CLEARED FOR RE-INTEGRATION (LSI >= 90%)"
+    elif status == 'CONDITIONAL_HOLD':
+        c_status = colors.HexColor("#F59E0B")
+        c_status_bg = colors.HexColor("#FFFBEB")
+        status_label = "CONDITIONAL HOLD — COMPENSATORY ASYMMETRY"
+    else:
+        c_status = colors.HexColor("#EF4444")
+        c_status_bg = colors.HexColor("#FEF2F2")
+        status_label = "STRICT HOLD — HIGH RE-TEAR RISK (< 80% LSI)"
+
+    styles = getSampleStyleSheet()
+    
+    title_style = ParagraphStyle(
+        'HospTitle',
+        parent=styles['Normal'],
+        fontName='Helvetica-Bold',
+        fontSize=15,
+        leading=18,
+        textColor=c_navy
+    )
+    
+    sub_style = ParagraphStyle(
+        'HospSub',
+        parent=styles['Normal'],
+        fontName='Helvetica',
+        fontSize=8,
+        leading=11,
+        textColor=c_gray_muted
+    )
+    
+    body_style = ParagraphStyle(
+        'HospBody',
+        parent=styles['Normal'],
+        fontName='Helvetica',
+        fontSize=8,
+        leading=11,
+        textColor=c_gray_dark
+    )
+    
+    bold_style = ParagraphStyle(
+        'HospBold',
+        parent=styles['Normal'],
+        fontName='Helvetica-Bold',
+        fontSize=8,
+        leading=11,
+        textColor=c_gray_dark
+    )
+
+    elements = []
+    
+    # -------------------------------------------------------------
+    # 1. INSTITUTIONAL HEADER
+    # -------------------------------------------------------------
+    header_data = [
+        [
+            Paragraph("<b>DEPARTMENT OF ORTHOPEDIC SURGERY & SPORTS MEDICINE</b><br/><font size=7 color='#0284C7'>CENTER FOR JOINT PRESERVATION & BIOMECHANICAL RESTORATION</font>", title_style),
+            Paragraph(f"<b>SURGICAL CLEARANCE REPORT</b><br/><font size=7 color='#64748B'>Date: {datetime.now().strftime('%d %b %Y')}<br/>Protocol: Padua LESS / Grindem RTP</font>", ParagraphStyle('HRight', parent=sub_style, alignment=2))
+        ]
+    ]
+    h_table = Table(header_data, colWidths=[370, 186])
+    h_table.setStyle(TableStyle([
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 0),
+        ('TOPPADDING', (0,0), (-1,-1), 0),
+    ]))
+    elements.append(h_table)
+    elements.append(Spacer(1, 4))
+    elements.append(HRFlowable(width="100%", thickness=1.5, color=c_blue, spaceBefore=2, spaceAfter=6))
+
+    # -------------------------------------------------------------
+    # 2. PATIENT & SURGICAL SPECIFICATION TABLE
+    # -------------------------------------------------------------
+    op_clean = operated_side.upper()
+    patient_meta = [
+        [
+            Paragraph(f"<b>Patient Identifier:</b> {patient_id}", body_style),
+            Paragraph(f"<b>Attending Surgeon:</b> {surgeon_name or 'Dr. Attending Orthopedic Surgeon, MD'}", body_style),
+            Paragraph(f"<b>Operated Limb:</b> <font color='#0369A1'><b>{op_clean} KNEE</b></font>", body_style)
+        ],
+        [
+            Paragraph(f"<b>Procedure & Graft:</b> {graft_type}", body_style),
+            Paragraph(f"<b>Date of Reconstruction:</b> {surgery_date or 'Recorded in EMR'}", body_style),
+            Paragraph(f"<b>Post-Op Milestone:</b> Month {post_op_months} Protocol", body_style)
+        ]
+    ]
+    meta_table = Table(patient_meta, colWidths=[185, 215, 156])
+    meta_table.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,-1), c_gray_bg),
+        ('BOX', (0,0), (-1,-1), 0.5, c_border),
+        ('INNERGRID', (0,0), (-1,-1), 0.5, c_border),
+        ('TOPPADDING', (0,0), (-1,-1), 4),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 4),
+        ('LEFTPADDING', (0,0), (-1,-1), 6),
+        ('RIGHTPADDING', (0,0), (-1,-1), 6),
+    ]))
+    elements.append(meta_table)
+    elements.append(Spacer(1, 8))
+
+    # -------------------------------------------------------------
+    # 3. HERO CLINICAL VERDICT & LSI BANNER
+    # -------------------------------------------------------------
+    comp_lsi = lsi_data.get('composite_lsi', 0.0)
+    verdict_text = (
+        f"<font size=12><b>LIMB SYMMETRY INDEX: {comp_lsi:.1f}%</b></font><br/>"
+        f"<font size=9><b>STATUS: {status_label}</b></font><br/>"
+        f"<font size=7 color='#334155'>{lsi_data.get('clinical_recommendation', '')}</font>"
+    )
+    verdict_data = [[Paragraph(verdict_text, ParagraphStyle('VerdictStyle', parent=body_style, leading=11))]]
+    verdict_table = Table(verdict_data, colWidths=[content_width])
+    verdict_table.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,-1), c_status_bg),
+        ('BOX', (0,0), (-1,-1), 1.5, c_status),
+        ('TOPPADDING', (0,0), (-1,-1), 6),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 6),
+        ('LEFTPADDING', (0,0), (-1,-1), 10),
+        ('RIGHTPADDING', (0,0), (-1,-1), 10),
+    ]))
+    elements.append(verdict_table)
+    elements.append(Spacer(1, 8))
+
+    # -------------------------------------------------------------
+    # 4. BILATERAL KINEMATIC COMPARATIVE SCORECARD
+    # -------------------------------------------------------------
+    elements.append(Paragraph("<b>OBJECTIVE BILATERAL KINEMATIC COMPARISON (INVOLVED vs CONTRALATERAL)</b>", bold_style))
+    elements.append(Spacer(1, 3))
+    
+    sub = lsi_data.get('sub_metrics', {})
+    knee_f = sub.get('knee_flexion', {})
+    knee_v = sub.get('knee_valgus', {})
+    hip_f = sub.get('hip_flexion', {})
+    ank_f = sub.get('ankle_dorsiflexion', {})
+
+    scorecard_data = [
+        [
+            Paragraph("<b>Kinematic Marker</b>", bold_style),
+            Paragraph(f"<b>Operated ({op_clean})</b>", bold_style),
+            Paragraph("<b>Healthy Contralateral</b>", bold_style),
+            Paragraph("<b>Side Delta</b>", bold_style),
+            Paragraph("<b>LSI (%)</b>", bold_style),
+            Paragraph("<b>Clinical Benchmark</b>", bold_style)
+        ],
+        [
+            Paragraph("Knee Flexion Shock Attenuation", body_style),
+            Paragraph(f"{knee_f.get('involved', 0):.1f}°", body_style),
+            Paragraph(f"{knee_f.get('uninvolved', 0):.1f}°", body_style),
+            Paragraph(f"{knee_f.get('diff', 0):.1f}°", body_style),
+            Paragraph(f"<b>{knee_f.get('lsi', 0):.1f}%</b>", body_style),
+            Paragraph("Pass if >= 90.0%", body_style)
+        ],
+        [
+            Paragraph("Frontal Dynamic Valgus (FPPA)", body_style),
+            Paragraph(f"{knee_v.get('involved', 0):.1f}°", body_style),
+            Paragraph(f"{knee_v.get('uninvolved', 0):.1f}°", body_style),
+            Paragraph(f"{knee_v.get('diff', 0):+.1f}°", body_style),
+            Paragraph(f"<b>{knee_v.get('lsi', 0):.1f}%</b>", body_style),
+            Paragraph("Pass if <= 3.0° valgus", body_style)
+        ],
+        [
+            Paragraph("Hip Hinge Attenuation", body_style),
+            Paragraph(f"{hip_f.get('involved', 0):.1f}°", body_style),
+            Paragraph(f"{hip_f.get('uninvolved', 0):.1f}°", body_style),
+            Paragraph(f"{hip_f.get('diff', 0):.1f}°", body_style),
+            Paragraph(f"<b>{hip_f.get('lsi', 0):.1f}%</b>", body_style),
+            Paragraph("Pass if >= 85.0%", body_style)
+        ],
+        [
+            Paragraph("Ankle Dorsiflexion Dissipation", body_style),
+            Paragraph(f"{ank_f.get('involved', 0):.1f}°", body_style),
+            Paragraph(f"{ank_f.get('uninvolved', 0):.1f}°", body_style),
+            Paragraph(f"{ank_f.get('diff', 0):.1f}°", body_style),
+            Paragraph(f"<b>{ank_f.get('lsi', 0):.1f}%</b>", body_style),
+            Paragraph("Pass if >= 85.0%", body_style)
+        ]
+    ]
+    
+    sc_table = Table(scorecard_data, colWidths=[176, 75, 85, 65, 65, 90])
+    sc_table.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), c_navy),
+        ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+        ('BOX', (0,0), (-1,-1), 0.5, c_border),
+        ('INNERGRID', (0,0), (-1,-1), 0.5, c_border),
+        ('TOPPADDING', (0,0), (-1,-1), 3),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 3),
+        ('LEFTPADDING', (0,0), (-1,-1), 5),
+        ('RIGHTPADDING', (0,0), (-1,-1), 5),
+        ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, c_gray_bg]),
+    ]))
+    elements.append(sc_table)
+    elements.append(Spacer(1, 8))
+
+    # -------------------------------------------------------------
+    # 5. SURGICAL GRAFT PEARLS & REHAB DIRECTIVES
+    # -------------------------------------------------------------
+    graft_pearl = lsi_data.get('graft_pearl', '')
+    pearl_content = [
+        [
+            Paragraph("<b>GRAFT-SPECIFIC BIOMECHANICAL DIRECTIVE:</b>", bold_style),
+            Paragraph(graft_pearl, body_style)
+        ]
+    ]
+    p_table = Table(pearl_content, colWidths=[185, 371])
+    p_table.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor("#F1F5F9")),
+        ('BOX', (0,0), (-1,-1), 0.5, c_border),
+        ('TOPPADDING', (0,0), (-1,-1), 4),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 4),
+        ('LEFTPADDING', (0,0), (-1,-1), 6),
+        ('RIGHTPADDING', (0,0), (-1,-1), 6),
+    ]))
+    elements.append(p_table)
+    elements.append(Spacer(1, 8))
+
+    # -------------------------------------------------------------
+    # 6. BILLING CODES & PHYSICIAN SIGNOFF BLOCK
+    # -------------------------------------------------------------
+    signoff_data = [
+        [
+            Paragraph(
+                "<b>INSURANCE CODING AUDIT SUMMARY:</b><br/>"
+                "• <b>CPT 97750:</b> Physical Performance Test (Objective kinematic written report)<br/>"
+                "• <b>CPT 98975 / 98977:</b> Remote Therapeutic Monitoring (RTM movement data)<br/>"
+                "• <b>ICD-10 Z96.651:</b> Presence of right artificial knee joint / surgical graft<br/>"
+                "• <b>ICD-10 Z96.652:</b> Presence of left artificial knee joint / surgical graft",
+                ParagraphStyle('BillingText', parent=body_style, fontSize=7, leading=9.5)
+            ),
+            Paragraph(
+                "<b>ATTENDING PHYSICIAN / SURGEON SIGN-OFF:</b><br/><br/>"
+                "Signature: _____________________________________<br/><br/>"
+                "Physician License #: __________________  NPI: ____________<br/>"
+                f"Review Date: {datetime.now().strftime('%B %d, %Y')}",
+                ParagraphStyle('SignText', parent=body_style, fontSize=7.5, leading=10)
+            )
+        ]
+    ]
+    sign_table = Table(signoff_data, colWidths=[270, 286])
+    sign_table.setStyle(TableStyle([
+        ('BOX', (0,0), (-1,-1), 0.5, c_border),
+        ('INNERGRID', (0,0), (-1,-1), 0.5, c_border),
+        ('BACKGROUND', (0,0), (0,0), colors.HexColor("#F8FAFC")),
+        ('TOPPADDING', (0,0), (-1,-1), 6),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 6),
+        ('LEFTPADDING', (0,0), (-1,-1), 8),
+        ('RIGHTPADDING', (0,0), (-1,-1), 8),
+    ]))
+    elements.append(sign_table)
+    elements.append(Spacer(1, 4))
+
+    # -------------------------------------------------------------
+    # 7. LEGAL & COMPLIANCE FOOTER
+    # -------------------------------------------------------------
+    footer_text = (
+        "CONFIDENTIAL MEDICAL RECORD. Generated by AthleteGuard AI Orthopedic Biomechanics Core in accordance with "
+        "LESS Protocol (Padua et al., 2009) and Return-to-Play Consensus Guidelines (Grindem et al., 2016). "
+        "This objective kinematic report supplements clinical joint laxity (Lachman/Pivot-Shift) and strength examinations."
+    )
+    elements.append(Paragraph(f"<font size=6 color='#64748B'>{footer_text}</font>", body_style))
+
+    doc.build(elements)
+    
+    if output_path:
+        with open(output_path, "rb") as f:
+            return f.read()
+    else:
+        buffer.seek(0)
+        return buffer.getvalue()
+

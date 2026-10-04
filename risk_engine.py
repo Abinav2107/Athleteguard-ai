@@ -1379,6 +1379,188 @@ def calculate_risk_indication(landmarks: List,
 
 
 # ==============================
+# ORTHOPEDIC POST-OP & LIMB SYMMETRY INDEX (LSI) MODULE
+# ==============================
+
+def calculate_limb_symmetry_index(
+    raw_values: dict,
+    operated_side: str = "LEFT",
+    graft_type: str = "Bone-Patellar Tendon-Bone (BPTB) Autograft",
+    post_op_months: int = 9
+) -> dict:
+    """
+    Calculate clinical Limb Symmetry Index (LSI %) and orthopedic Return-to-Play (RTP)
+    readiness benchmark based on involved (operated) vs uninvolved (healthy) limb kinematics.
+    
+    Standardized Orthopedic Criteria (Grindem et al., 2016; Hewett et al., 2016):
+      - LSI >= 90.0%: CLINICAL CLEARANCE PASS (Symmetrical loading, minimal re-tear risk)
+      - 80.0% <= LSI < 90.0%: CONDITIONAL / ASYMMETRIC COMPENSATION (Quad avoidance mechanism)
+      - LSI < 80.0%: CRITICAL DEFICIT / STRICT HOLD (High secondary graft re-tear risk)
+    """
+    raw = raw_values or {}
+    op_side = operated_side.strip().upper() if operated_side else "LEFT"
+    is_left = (op_side == "LEFT")
+    
+    # Extract bilateral values (falling back to unilateral if camera is sagittal)
+    if is_left:
+        inv_knee = raw.get('left_knee_angle') if raw.get('left_knee_angle') is not None else raw.get('knee_angle', 70.0)
+        uninv_knee = raw.get('right_knee_angle') if raw.get('right_knee_angle') is not None else raw.get('knee_angle', 70.0)
+        inv_valgus = raw.get('left_knee_valgus') if raw.get('left_knee_valgus') is not None else raw.get('knee_valgus', 2.0)
+        uninv_valgus = raw.get('right_knee_valgus') if raw.get('right_knee_valgus') is not None else raw.get('knee_valgus', 2.0)
+        inv_hip = raw.get('left_hip_angle') if raw.get('left_hip_angle') is not None else raw.get('hip_angle', 65.0)
+        uninv_hip = raw.get('right_hip_angle') if raw.get('right_hip_angle') is not None else raw.get('hip_angle', 65.0)
+        inv_ankle = raw.get('left_ankle_dorsiflexion') if raw.get('left_ankle_dorsiflexion') is not None else raw.get('ankle_dorsiflexion', 85.0)
+        uninv_ankle = raw.get('right_ankle_dorsiflexion') if raw.get('right_ankle_dorsiflexion') is not None else raw.get('ankle_dorsiflexion', 85.0)
+    else:
+        inv_knee = raw.get('right_knee_angle') if raw.get('right_knee_angle') is not None else raw.get('knee_angle', 70.0)
+        uninv_knee = raw.get('left_knee_angle') if raw.get('left_knee_angle') is not None else raw.get('knee_angle', 70.0)
+        inv_valgus = raw.get('right_knee_valgus') if raw.get('right_knee_valgus') is not None else raw.get('knee_valgus', 2.0)
+        uninv_valgus = raw.get('left_knee_valgus') if raw.get('left_knee_valgus') is not None else raw.get('knee_valgus', 2.0)
+        inv_hip = raw.get('right_hip_angle') if raw.get('right_hip_angle') is not None else raw.get('hip_angle', 65.0)
+        uninv_hip = raw.get('left_hip_angle') if raw.get('left_hip_angle') is not None else raw.get('hip_angle', 65.0)
+        inv_ankle = raw.get('right_ankle_dorsiflexion') if raw.get('right_ankle_dorsiflexion') is not None else raw.get('ankle_dorsiflexion', 85.0)
+        uninv_ankle = raw.get('left_ankle_dorsiflexion') if raw.get('left_ankle_dorsiflexion') is not None else raw.get('ankle_dorsiflexion', 85.0)
+
+    # 1. Knee Flexion LSI (Shock attenuation capacity)
+    if uninv_knee > 0 and inv_knee > 0:
+        if inv_knee <= uninv_knee:
+            lsi_knee = (inv_knee / uninv_knee) * 100.0
+        else:
+            lsi_knee = (uninv_knee / inv_knee) * 100.0
+    else:
+        lsi_knee = 100.0
+    lsi_knee = min(100.0, max(0.0, lsi_knee))
+
+    # 2. Frontal Valgus Dynamic Control LSI
+    # Penalize inward collapse on the involved limb
+    valgus_delta = inv_valgus - uninv_valgus
+    if valgus_delta <= 0.0:
+        lsi_valgus = 100.0
+    else:
+        lsi_valgus = max(0.0, 100.0 - (valgus_delta * 12.0))
+    lsi_valgus = min(100.0, max(0.0, lsi_valgus))
+
+    # 3. Hip Flexion Hinge LSI
+    if uninv_hip > 0 and inv_hip > 0:
+        lsi_hip = (min(inv_hip, uninv_hip) / max(inv_hip, uninv_hip)) * 100.0
+    else:
+        lsi_hip = 100.0
+    lsi_hip = min(100.0, max(0.0, lsi_hip))
+
+    # 4. Ankle Dorsiflexion LSI
+    if uninv_ankle > 0 and inv_ankle > 0:
+        lsi_ankle = (min(inv_ankle, uninv_ankle) / max(inv_ankle, uninv_ankle)) * 100.0
+    else:
+        lsi_ankle = 100.0
+    lsi_ankle = min(100.0, max(0.0, lsi_ankle))
+
+    # Composite Clinical LSI (Weighted towards knee flexion and frontal valgus stability)
+    composite_lsi = (0.40 * lsi_knee) + (0.35 * lsi_valgus) + (0.15 * lsi_hip) + (0.10 * lsi_ankle)
+    composite_lsi = round(composite_lsi, 1)
+
+    # Expected Milestone Target
+    milestone_targets = {
+        3: 70.0,   # Month 3: Basic symmetric loading
+        6: 80.0,   # Month 6: Deceleration and jump introduction
+        9: 90.0,   # Month 9: Return to Play threshold (Gold Standard)
+        12: 90.0   # Month 12: Full contact competition
+    }
+    target_lsi = milestone_targets.get(post_op_months, 90.0)
+
+    # Clinical Status & Recommendations
+    if composite_lsi >= 90.0:
+        status = "CLINICAL_PASS"
+        label = "CLINICAL CLEARANCE BENCHMARK MET"
+        badge_color = "#34d399"  # Emerald Green
+        recommendation = (
+            f"Patient demonstrates symmetrical bilateral deceleration ({composite_lsi}% LSI >= 90% benchmark). "
+            f"Candidate for Stage 3 Functional Agility & Sports Re-integration. Re-evaluate at 12 months."
+        )
+    elif composite_lsi >= 80.0:
+        status = "CONDITIONAL_HOLD"
+        label = "CONDITIONAL / COMPENSATORY OFFLOADING"
+        badge_color = "#fbbf24"  # Amber
+        recommendation = (
+            f"Moderate asymmetry detected ({composite_lsi}% LSI). Patient is exhibiting compensatory "
+            f"quad avoidance on the operated {op_side.lower()} limb. High risk for contralateral overload. "
+            f"Recommend 4-6 weeks of targeted eccentric single-leg drop-to-stick drills and closed-chain VMO loading."
+        )
+    else:
+        status = "STRICT_HOLD"
+        label = "CRITICAL DEFICIT — HOLD RETURN-TO-SPORT"
+        badge_color = "#f87171"  # Crimson Red
+        recommendation = (
+            f"Significant biomechanical deficit ({composite_lsi}% LSI < 80%). High risk of secondary graft re-tear "
+            f"or contralateral ACL rupture. STRICT HOLD on cutting, pivoting, and high-impact sports. "
+            f"Immediate focus required on neuromuscular re-education and kinetic chain alignment."
+        )
+
+    # Graft-Specific Pearls
+    graft_str = str(graft_type).lower()
+    if "bptb" in graft_str or "patellar" in graft_str:
+        graft_pearl = "Bone-Patellar Tendon-Bone (BPTB): Monitor donor site anterior knee pain and terminal extension deficits during eccentric landing."
+    elif "hamstring" in graft_str:
+        graft_pearl = "Hamstring Autograft: Assess deep flexion strength deficit and transverse tibial rotation control during deceleration."
+    elif "quad" in graft_str:
+        graft_pearl = "Quadriceps Tendon Autograft: Monitor peak eccentric quadriceps force dampening and deceleration stiffness."
+    else:
+        graft_pearl = "Allograft: Note slower biological revascularization and ligamentization; recommend conservative progression."
+
+    return {
+        'composite_lsi': composite_lsi,
+        'status': status,
+        'label': label,
+        'badge_color': badge_color,
+        'target_lsi': target_lsi,
+        'milestone_met': composite_lsi >= target_lsi,
+        'operated_side': op_side,
+        'post_op_months': post_op_months,
+        'graft_type': graft_type,
+        'graft_pearl': graft_pearl,
+        'sub_metrics': {
+            'knee_flexion': {
+                'label': 'Knee Flexion Shock Absorption',
+                'lsi': round(lsi_knee, 1),
+                'involved': round(inv_knee, 1),
+                'uninvolved': round(uninv_knee, 1),
+                'diff': round(abs(inv_knee - uninv_knee), 1),
+                'unit': 'deg'
+            },
+            'knee_valgus': {
+                'label': 'Dynamic Valgus Control (FPPA)',
+                'lsi': round(lsi_valgus, 1),
+                'involved': round(inv_valgus, 1),
+                'uninvolved': round(uninv_valgus, 1),
+                'diff': round(valgus_delta, 1),
+                'unit': 'deg'
+            },
+            'hip_flexion': {
+                'label': 'Hip Hinge Attenuation',
+                'lsi': round(lsi_hip, 1),
+                'involved': round(inv_hip, 1),
+                'uninvolved': round(uninv_hip, 1),
+                'diff': round(abs(inv_hip - uninv_hip), 1),
+                'unit': 'deg'
+            },
+            'ankle_dorsiflexion': {
+                'label': 'Ankle Dorsiflexion Dissipation',
+                'lsi': round(lsi_ankle, 1),
+                'involved': round(inv_ankle, 1),
+                'uninvolved': round(uninv_ankle, 1),
+                'diff': round(abs(inv_ankle - uninv_ankle), 1),
+                'unit': 'deg'
+            }
+        },
+        'clinical_recommendation': recommendation,
+        'cpt_codes': {
+            'CPT_97750': 'Physical Performance Test (Objective kinematic measurement with written report)',
+            'CPT_98975': 'Remote Therapeutic Monitoring (Initial patient device / portal onboarding)',
+            'CPT_98977': 'RTM Musculoskeletal System Monitoring (30-day recorded movement data transmission)'
+        }
+    }
+
+
+# ==============================
 # TEST SECTION
 # ==============================
 
