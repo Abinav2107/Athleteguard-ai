@@ -726,7 +726,10 @@ def generate_coach_comparison_video(
     if cap_ref is not None:
         cap_ref.release()
     out_writer.release()
-    cv2.destroyAllWindows()
+    try:
+        cv2.destroyAllWindows()
+    except Exception:
+        pass
     
     return {
         'success': True,
@@ -1013,7 +1016,10 @@ def process_video(video_path, model_path, output_annotated_path=None, sport='lon
     cap.release()
     if out_writer is not None:
         out_writer.release()
-    cv2.destroyAllWindows()
+    try:
+        cv2.destroyAllWindows()
+    except Exception:
+        pass
 
     detection_rate = pose_detected_count / frame_number if frame_number > 0 else 0.0
 
